@@ -1,0 +1,15 @@
+FileType=text/acmi/tacview
+FileVersion=2.2
+0,ReferenceTime=2023-12-25T10:00:00Z,Title=Test Mission,DataSource=TestSim,ReferenceLongitude=0,ReferenceLatitude=0
+#0
+3001,T=41.6|41.5|2000|10|5|270,Name=F-16C,Type=Air+FixedWing,Pilot=Viper 1,Country=us,Coalition=Blue
+3002,T=42.0|42.0|3000|0|0|90,Name=MiG-29,Type=Air+FixedWing,Pilot=Bandit 1,Coalition=Red
+#10.5
+3001,T=41.7||2100|||275
+3002,T=42.1||3100
+#20.0
+3001,T=41.8||2200,IAS=150.5,Throttle=0.8
+0,Event=TakenOff|3001|Viper 1 airborne
+#30.0
+-3002
+0,Event=Destroyed|3002|MiG-29 shot down
