@@ -1,0 +1,11 @@
+FileType=text/acmi/tacview
+FileVersion=2.2
+0,ReferenceTime=2025-01-15T08:00:00Z
+#0
+A001,T=-118.5|34.0|3000,Name=Three
+A002,T=-118.5|34.0|3000|100|200,Name=Five
+A003,T=-118.5|34.0|3000|10|5|270,Name=Six
+A004,T=-118.5|34.0|3000|10|5|270|100|200|90,Name=Nine
+#1.0
+A001,T=||3100
+A003,T=|||10||

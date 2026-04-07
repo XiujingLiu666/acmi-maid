@@ -1,0 +1,5 @@
+FileType=text/acmi/tacview
+FileVersion=2.2
+0,ReferenceTime=2025-01-15T08:00:00Z,Title=Test\, with comma
+#0
+B001,T=-118.5|34.0|3000,Name=Test\, Aircraft,Label=Hello\, World

@@ -689,7 +689,7 @@ class TestFormatTransform:
         t = Transform(longitude=41.6, latitude=41.5, altitude=2000.0,
                       u=100.0, v=200.0)
         result = format_transform(t)
-        assert result == "41.6|41.5|2000.0||100.0|200.0"
+        assert result == "41.6|41.5|2000.0|100.0|200.0"
 
 
 class TestAcmiDatetime:
@@ -738,6 +738,30 @@ class TestEscapeValue:
         escaped = escape_value(original)
         parts = split_escaped(escaped)
         assert parts == [original]
+
+
+class TestToSnakeCase:
+    def test_pascal(self):
+        from acmi_maid.utils import to_snake_case
+        assert to_snake_case("CallSign") == "call_sign"
+        assert to_snake_case("OnGround") == "on_ground"
+        assert to_snake_case("LandingGear") == "landing_gear"
+
+    def test_abbreviation(self):
+        from acmi_maid.utils import to_snake_case
+        assert to_snake_case("IAS") == "ias"
+        assert to_snake_case("ICAO24") == "icao24"
+
+
+class TestToPascalCase:
+    def test_snake(self):
+        from acmi_maid.utils import to_pascal_case
+        assert to_pascal_case("call_sign") == "CallSign"
+        assert to_pascal_case("on_ground") == "OnGround"
+
+    def test_single_word(self):
+        from acmi_maid.utils import to_pascal_case
+        assert to_pascal_case("name") == "Name"
 ```
 
 - [ ] **Step 2: Run tests — expect FAIL**
@@ -887,6 +911,30 @@ def split_escaped(line: str, delimiter: str = ",") -> list[str]:
 def escape_value(value: str) -> str:
     """Escape commas in a property value for ACMI output."""
     return value.replace(",", "\\,")
+
+
+def to_snake_case(name: str) -> str:
+    """Convert PascalCase ACMI property name to snake_case."""
+    result = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    result = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", result)
+    return result.lower()
+
+
+def to_pascal_case(name: str) -> str:
+    """Convert snake_case Python field name to PascalCase ACMI property name."""
+    return "".join(word.capitalize() for word in name.split("_"))
+
+
+# Shared reverse mapping: GlobalProperties field -> ACMI key
+GLOBAL_REVERSE_MAP: dict[str, str] = {
+    "data_source": "DataSource", "data_recorder": "DataRecorder",
+    "reference_time": "ReferenceTime", "recording_time": "RecordingTime",
+    "reference_longitude": "ReferenceLongitude",
+    "reference_latitude": "ReferenceLatitude",
+    "author": "Author", "title": "Title", "category": "Category",
+    "briefing": "Briefing", "debriefing": "Debriefing",
+    "comments": "Comments", "map_id": "MapId",
+}
 ```
 
 - [ ] **Step 4: Run tests — expect PASS**
@@ -1095,6 +1143,55 @@ class TestParseEscapedCommas:
         assert acmi.globals.title == "Hello, World"
 
 
+class TestParseIndexedProperties:
+    def test_locked_targets(self):
+        content = (
+            "FileType=text/acmi/tacview\n"
+            "FileVersion=2.2\n"
+            "#0\n"
+            "3001,Name=F-16C,LockedTarget0=4001,LockedTarget1=4002\n"
+        )
+        acmi = AcmiParser.parse(io.StringIO(content))
+        obj = acmi.objects[0x3001]
+        assert len(obj.properties.locked_targets) == 2
+        assert obj.properties.locked_targets[0] == 0x4001
+        assert obj.properties.locked_targets[1] == 0x4002
+
+    def test_fuel_weights(self):
+        content = (
+            "FileType=text/acmi/tacview\n"
+            "FileVersion=2.2\n"
+            "#0\n"
+            "3001,Name=F-16C,FuelWeight0=2500.0,FuelWeight1=1200.5\n"
+        )
+        acmi = AcmiParser.parse(io.StringIO(content))
+        obj = acmi.objects[0x3001]
+        assert len(obj.properties.fuel_weights) == 2
+        assert obj.properties.fuel_weights[0] == 2500.0
+        assert obj.properties.fuel_weights[1] == 1200.5
+
+
+class TestParseUnicode:
+    def test_unicode_pilot_name(self):
+        content = (
+            "FileType=text/acmi/tacview\n"
+            "FileVersion=2.2\n"
+            "#0\n"
+            "3001,Name=Su-27,Pilot=\u041f\u0435\u0442\u0440\u043e\u0432\n"
+        )
+        acmi = AcmiParser.parse(io.StringIO(content))
+        assert acmi.objects[0x3001].properties.pilot == "\u041f\u0435\u0442\u0440\u043e\u0432"
+
+    def test_unicode_title(self):
+        content = (
+            "FileType=text/acmi/tacview\n"
+            "FileVersion=2.2\n"
+            "0,Title=\u4efb\u52a1\u6d4b\u8bd5\n"
+        )
+        acmi = AcmiParser.parse(io.StringIO(content))
+        assert acmi.globals.title == "\u4efb\u52a1\u6d4b\u8bd5"
+
+
 class TestIterRecords:
     def test_iter_records(self):
         content = (
@@ -1295,7 +1392,7 @@ def _set_object_prop(props: ObjectProperties, key: str, value: str) -> None:
         idx = int(m.group(1))
         while len(props.locked_targets) <= idx:
             props.locked_targets.append(0)
-        props.locked_targets[idx] = int(value, 16) if not value.isdigit() else int(value)
+        props.locked_targets[idx] = int(value, 16)
         return
     m = _RE_FUEL_WEIGHT.match(key)
     if m:
@@ -1697,24 +1794,13 @@ from pathlib import Path
 from typing import IO
 
 from acmi_maid.models import AcmiFile, AcmiObject, Event, Frame, GlobalProperties
-from acmi_maid.utils import escape_value, format_acmi_datetime, format_transform
-
-# Reverse mapping: GlobalProperties field -> ACMI key
-_GLOBAL_REVERSE: dict[str, str] = {
-    "data_source": "DataSource", "data_recorder": "DataRecorder",
-    "reference_time": "ReferenceTime", "recording_time": "RecordingTime",
-    "reference_longitude": "ReferenceLongitude",
-    "reference_latitude": "ReferenceLatitude",
-    "author": "Author", "title": "Title", "category": "Category",
-    "briefing": "Briefing", "debriefing": "Debriefing",
-    "comments": "Comments", "map_id": "MapId",
-}
+from acmi_maid.utils import escape_value, format_acmi_datetime, format_transform, GLOBAL_REVERSE_MAP
 
 
 def _format_global_props(gp: GlobalProperties) -> list[str]:
     """Format global properties as Key=Value pairs."""
     parts: list[str] = []
-    for field_name, acmi_key in _GLOBAL_REVERSE.items():
+    for field_name, acmi_key in GLOBAL_REVERSE_MAP.items():
         value = getattr(gp, field_name)
         if value is None:
             continue
@@ -1970,17 +2056,7 @@ from pathlib import Path
 from typing import IO
 
 from acmi_maid.models import Event, GlobalProperties, Transform
-from acmi_maid.utils import escape_value, format_acmi_datetime, format_transform
-
-_GLOBAL_REVERSE: dict[str, str] = {
-    "data_source": "DataSource", "data_recorder": "DataRecorder",
-    "reference_time": "ReferenceTime", "recording_time": "RecordingTime",
-    "reference_longitude": "ReferenceLongitude",
-    "reference_latitude": "ReferenceLatitude",
-    "author": "Author", "title": "Title", "category": "Category",
-    "briefing": "Briefing", "debriefing": "Debriefing",
-    "comments": "Comments", "map_id": "MapId",
-}
+from acmi_maid.utils import escape_value, format_acmi_datetime, format_transform, GLOBAL_REVERSE_MAP
 
 
 class AcmiStreamer:
@@ -2020,7 +2096,7 @@ class AcmiStreamer:
         self._stream.write("FileVersion=2.2\n")
         if gp:
             parts: list[str] = []
-            for field_name, acmi_key in _GLOBAL_REVERSE.items():
+            for field_name, acmi_key in GLOBAL_REVERSE_MAP.items():
                 value = getattr(gp, field_name)
                 if value is None:
                     continue
