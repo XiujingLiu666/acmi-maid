@@ -9,6 +9,7 @@ from acmi_maid.enums import (
 from acmi_maid.models import (
     AcmiFile,
     AcmiObject,
+    CustomDataMixin,
     Event,
     EventRecord,
     Frame,
@@ -38,6 +39,8 @@ __all__ = [
     "RemovalRecord",
     "EventRecord",
     "Record",
+    # Mixins
+    "CustomDataMixin",
     # Enums
     "EventType",
     "ObjectClass",

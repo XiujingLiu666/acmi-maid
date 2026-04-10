@@ -96,3 +96,78 @@ def test_record_types():
     assert rr.object_id == 1
     er = EventRecord(event_type=EventType.MESSAGE, object_ids=[], text="hi", timestamp=0.0)
     assert er.text == "hi"
+
+
+def test_global_properties_custom_data():
+    g = GlobalProperties()
+    g.set_custom("myKey", "myValue")
+    assert g.get_custom("myKey") == "myValue"
+    assert g.get_all_custom() == {"myKey": "myValue"}
+
+    g.set_custom("anotherKey", "anotherValue")
+    assert g.get_all_custom() == {"myKey": "myValue", "anotherKey": "anotherValue"}
+
+    assert g.delete_custom("myKey") is True
+    assert g.get_custom("myKey") is None
+    assert g.get_all_custom() == {"anotherKey": "anotherValue"}
+
+    assert g.delete_custom("nonexistent") is False
+
+
+def test_global_properties_custom_data_in_extra():
+    g = GlobalProperties()
+    g.set_custom("key1", "value1")
+    assert "__custom_key1" in g.extra
+    assert g.extra["__custom_key1"] == "value1"
+
+
+def test_object_properties_custom_data():
+    p = ObjectProperties()
+    p.set_custom("pilotName", "John")
+    assert p.get_custom("pilotName") == "John"
+    assert p.get_all_custom() == {"pilotName": "John"}
+
+    p.delete_custom("pilotName")
+    assert p.get_custom("pilotName") is None
+    assert p.get_all_custom() == {}
+
+
+def test_object_properties_custom_data_isolation_from_extra():
+    p = ObjectProperties()
+    p.extra["someOtherKey"] = "otherValue"
+    p.set_custom("customKey", "customValue")
+    assert p.extra["someOtherKey"] == "otherValue"
+    assert p.extra["__custom_customKey"] == "customValue"
+
+
+def test_acmi_object_custom_data():
+    obj = AcmiObject(id=0x3001)
+    obj.set_custom_data("aircraftType", "F-16")
+    assert obj.get_custom_data("aircraftType") == "F-16"
+
+    obj.set_custom_data("pilot", "Jane")
+    assert obj.get_all_custom_data() == {"aircraftType": "F-16", "pilot": "Jane"}
+
+    assert obj.delete_custom_data("aircraftType") is True
+    assert obj.get_custom_data("aircraftType") is None
+    assert obj.get_all_custom_data() == {"pilot": "Jane"}
+
+
+def test_acmi_file_global_custom_data():
+    acmi = AcmiFile()
+    acmi.set_global_custom_data("missionName", "Operation X")
+    assert acmi.get_global_custom_data("missionName") == "Operation X"
+
+    acmi.set_global_custom_data("difficulty", "hard")
+    assert acmi.get_all_global_custom_data() == {"missionName": "Operation X", "difficulty": "hard"}
+
+    assert acmi.delete_global_custom_data("missionName") is True
+    assert acmi.get_global_custom_data("missionName") is None
+    assert acmi.get_all_global_custom_data() == {"difficulty": "hard"}
+
+
+def test_acmi_object_custom_data_via_properties():
+    obj = AcmiObject(id=0x3001)
+    obj.properties.set_custom("testKey", "testValue")
+    assert obj.properties.get_custom("testKey") == "testValue"
+    assert obj.get_custom_data("testKey") == "testValue"

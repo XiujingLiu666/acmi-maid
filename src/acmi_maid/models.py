@@ -6,6 +6,34 @@ from datetime import datetime
 from acmi_maid.enums import EventType
 
 
+_CUSTOM_DATA_KEY = "__custom_"
+
+
+class CustomDataMixin:
+    extra: dict[str, str]
+
+    def set_custom(self, key: str, value: str) -> None:
+        self.extra[_CUSTOM_DATA_KEY + key] = value
+
+    def get_custom(self, key: str) -> str | None:
+        return self.extra.get(_CUSTOM_DATA_KEY + key)
+
+    def delete_custom(self, key: str) -> bool:
+        prefixed_key = _CUSTOM_DATA_KEY + key
+        if prefixed_key in self.extra:
+            del self.extra[prefixed_key]
+            return True
+        return False
+
+    def get_all_custom(self) -> dict[str, str]:
+        prefix_len = len(_CUSTOM_DATA_KEY)
+        return {
+            k[prefix_len:]: v
+            for k, v in self.extra.items()
+            if k.startswith(_CUSTOM_DATA_KEY)
+        }
+
+
 @dataclass
 class Transform:
     """Position and orientation in WGS-84 geodetic coordinates.
@@ -27,7 +55,7 @@ class Transform:
 
 
 @dataclass
-class GlobalProperties:
+class GlobalProperties(CustomDataMixin):
     """ACMI global properties (object ID 0)."""
 
     data_source: str | None = None
@@ -47,7 +75,7 @@ class GlobalProperties:
 
 
 @dataclass
-class ObjectProperties:
+class ObjectProperties(CustomDataMixin):
     """All known ACMI object properties with typed fields.
 
     None means the property has not been set / is unknown.
@@ -170,6 +198,41 @@ class AcmiObject:
     removed: bool = False
     removed_at: float | None = None
 
+    def set_custom_data(self, key: str, value: str) -> None:
+        prefixed_key = _CUSTOM_DATA_KEY + key
+        if self.timeline:
+            self.timeline[-1].properties[prefixed_key] = value
+        self.properties.set_custom(key, value)
+
+    def get_custom_data(self, key: str) -> str | None:
+        prefixed_key = _CUSTOM_DATA_KEY + key
+        if self.timeline:
+            frame = self.timeline[-1]
+            if prefixed_key in frame.properties:
+                return frame.properties[prefixed_key]
+        return self.properties.get_custom(key)
+
+    def delete_custom_data(self, key: str) -> bool:
+        prefixed_key = _CUSTOM_DATA_KEY + key
+        deleted = False
+        if self.timeline and prefixed_key in self.timeline[-1].properties:
+            del self.timeline[-1].properties[prefixed_key]
+            deleted = True
+        if self.properties.delete_custom(key):
+            deleted = True
+        return deleted
+
+    def get_all_custom_data(self) -> dict[str, str]:
+        result = self.properties.get_all_custom()
+        if self.timeline:
+            last_frame = self.timeline[-1]
+            prefix_len = len(_CUSTOM_DATA_KEY)
+            for k, v in last_frame.properties.items():
+                if k.startswith(_CUSTOM_DATA_KEY):
+                    key = k[prefix_len:]
+                    result[key] = v
+        return result
+
 
 @dataclass
 class Event:
@@ -190,6 +253,18 @@ class AcmiFile:
     globals: GlobalProperties = field(default_factory=GlobalProperties)
     objects: dict[int, AcmiObject] = field(default_factory=dict)
     events: list[Event] = field(default_factory=list)
+
+    def set_global_custom_data(self, key: str, value: str) -> None:
+        self.globals.set_custom(key, value)
+
+    def get_global_custom_data(self, key: str) -> str | None:
+        return self.globals.get_custom(key)
+
+    def delete_global_custom_data(self, key: str) -> bool:
+        return self.globals.delete_custom(key)
+
+    def get_all_global_custom_data(self) -> dict[str, str]:
+        return self.globals.get_all_custom()
 
 
 # --- Raw Record Types for iter_records ---
